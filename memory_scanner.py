@@ -1,8 +1,15 @@
 #!/usr/bin/env python3
 import re
 import os
+import mmap  
+import contextlib 
 
 def scan_for_patterns(data, patterns):
+    """
+    This function doesn't need any changes.
+    It will scan any data-like object (bytes or mmap)
+    that supports the regex interface.
+    """
     findings = []
     for pattern_name, pattern in patterns.items():
         matches = re.finditer(pattern, data)
@@ -24,11 +31,13 @@ def analyze_memory_dump(file_path):
     }
     
     try:
+        
         with open(file_path, 'rb') as f:
-            content = f.read()
             
-        results = scan_for_patterns(content, patterns)
-        return results
+            with contextlib.closing(mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)) as content:
+                
+                results = scan_for_patterns(content, patterns)
+                return results
         
     except Exception as e:
         return f"Error: {str(e)}"
@@ -40,13 +49,19 @@ def main():
         print("File not found")
         return
         
-    findings = analyze_memory_dump(target_file)
-    
-    print(f"\nScanning: {target_file}")
+    print(f"\nScanning: {target_file} (Memory-Efficient Mode)")
     print("=" * 50)
     
+    findings = analyze_memory_dump(target_file)
+
+    if isinstance(findings, str):
+        print(findings)
+        return
     for finding in findings[:20]:
-        print(f"{finding['type']}: {finding['data']}")
+        if isinstance(finding['data'], bytes):
+            print(f"{finding['type']}: {finding['data'].decode('utf-8', 'ignore')}")
+        else:
+            print(f"{finding['type']}: {finding['data']}")
 
 if __name__ == "__main__":
     main()
